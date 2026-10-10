@@ -67,6 +67,10 @@ Notes:
   are kept as-is with a per-image error; generation continues.
 - Each enhanced generation gets an infotext comment, e.g.
   `DLSS 5 Neural Render: pre+post hires, Style 1, intensity 1, passes 2`.
+- The enhanced images also overwrite their files in the output folder
+  (the WebUI writes the pre-enhancement images before the extension's pass
+  runs), so the folder, the gallery, and the Save button all show the
+  enhanced image.
 - The job progress label switches to "DLSS 5 Neural Render (pre-hires|post-hires, N image(s))"
   while a render runs.
 - NR Passes > 1 sends the official `nr_passes` preset to the CLI (the

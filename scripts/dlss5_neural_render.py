@@ -14,6 +14,7 @@ the extension only drives the official CLI.
 
 import json
 import logging
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -23,7 +24,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from modules import errors, sd_samplers_common, script_callbacks, scripts, shared
+from modules import errors, images, sd_samplers_common, script_callbacks, scripts, shared
 from modules.ui_components import InputAccordion
 
 import dlss5_cli
@@ -233,6 +234,34 @@ def _pre_latent_mode(p, sample, state):
     return new_sample, None
 
 
+def _resave_to_disk(orig, new) -> None:
+    """Overwrite the output-folder file of a replaced image with the enhanced one.
+
+    The core writes each image to disk during the batch loop (processing.py),
+    before the script postprocess hook runs, so after processed.images is
+    replaced in memory the folder still holds the pre-enhancement image.
+    Re-saving keeps the folder - and anything else reading it - in sync with
+    the gallery and the Save button, which use the in-memory images.
+    """
+    saved_as = getattr(orig, "already_saved_as", None)
+    if not saved_as:
+        return
+    fullfn = Path(saved_as)
+    if not fullfn.is_file():
+        return
+    tmp = fullfn.parent / f"{fullfn.name}.tmp"
+    try:
+        images.save_image_with_geninfo(
+            new, orig.info.get("parameters"), str(tmp), extension=fullfn.suffix
+        )
+        os.replace(tmp, fullfn)
+    except Exception as e:
+        errors.display(e, "updating the saved image in the output folder")
+        logger.exception("DLSS 5 Neural Render: could not update %s with the enhanced image", fullfn)
+        tmp.unlink(missing_ok=True)
+    new.already_saved_as = str(fullfn)
+
+
 def _postprocess_pass(p, processed, style, intensity, passes, when) -> None:
     enable_hr = bool(getattr(p, "enable_hr", False))
     idxs = dlss5_cli.final_indices(
@@ -251,7 +280,9 @@ def _postprocess_pass(p, processed, style, intensity, passes, when) -> None:
     replaced = 0
     for k, i in enumerate(idxs):
         if not errs[k]:
+            orig = processed.images[i]
             processed.images[i] = results[k]
+            _resave_to_disk(orig, results[k])
             replaced += 1
     if replaced > 0:
         _add_comment(p, state)
