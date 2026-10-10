@@ -7,12 +7,13 @@ is rendered through VE's DLSS 5 Neural Rendering pass. Generation never
 breaks: on any failure the original images are kept and the error is
 reported.
 
-The Visual Enhancer folder is configurable in the "DLSS 5 Neural Render"
-settings tab and persisted to data/dlss5_neural_render.json. No Visual
-Enhancer code is bundled; the extension only drives the official CLI.
+The Visual Enhancer folder is configurable in the standard WebUI Settings
+panel (section "DLSS 5 Neural Render"). No Visual Enhancer code is bundled;
+the extension only drives the official CLI.
 """
 
 import json
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -23,29 +24,40 @@ import torch
 from PIL import Image
 
 from modules import errors, sd_samplers_common, script_callbacks, scripts, shared
+from modules.ui_components import InputAccordion
 
 import dlss5_cli
 
-DATA_DIR = Path(__file__).resolve().parents[1] / "data"
-CONFIG_PATH = DATA_DIR / "dlss5_neural_render.json"
+logger = logging.getLogger(__name__)
+
+OPT_KEY = "dlss5_neural_render_ve_folder"
+LEGACY_CONFIG_PATH = Path(__file__).resolve().parents[1] / "data" / "dlss5_neural_render.json"
 
 VE_MISSING_REPORTED = False
 
 
-def load_config() -> dict:
-    """Read the saved config; falls back to defaults when missing or corrupt."""
+def _read_ve_folder() -> str:
+    """Read the Visual Enhancer folder from the WebUI settings."""
+    return str(shared.opts.data.get(OPT_KEY, "")).strip()
+
+
+def _migrate_legacy_config() -> None:
+    """One-shot move of the folder value out of the old settings-tab config file."""
+    if not LEGACY_CONFIG_PATH.is_file():
+        return
     try:
-        cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-        if isinstance(cfg, dict):
-            return {"ve_folder": str(cfg.get("ve_folder", ""))}
-    except (OSError, ValueError):
-        pass
-    return {"ve_folder": ""}
-
-
-def save_config(cfg: dict) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+        legacy = json.loads(LEGACY_CONFIG_PATH.read_text(encoding="utf-8"))
+        folder = str(legacy.get("ve_folder", "")).strip()
+        if folder and not str(shared.opts.data.get(OPT_KEY, "")).strip():
+            shared.opts.set(OPT_KEY, folder)
+            shared.opts.save(shared.config_filename)
+        LEGACY_CONFIG_PATH.unlink()
+    except Exception:
+        logger.warning(
+            "Could not migrate the legacy dlss5 config file; "
+            "set the folder in Settings > DLSS 5 Neural Render",
+            exc_info=True,
+        )
 
 
 def tensors_to_pils(t: torch.Tensor) -> list:
@@ -156,7 +168,7 @@ def _report_missing_cli() -> None:
     if VE_MISSING_REPORTED:
         return
     VE_MISSING_REPORTED = True
-    errors.report("Visual Enhancer not configured - set the folder in the 'DLSS 5 Neural Render' tab")
+    errors.report("Visual Enhancer not configured - set the folder in Settings > DLSS 5 Neural Render")
 
 
 def _record_pre_pass(p, errs: list) -> int:
@@ -228,7 +240,7 @@ def _postprocess_pass(p, processed, style, intensity, passes, when) -> None:
     )
     if not idxs:
         return
-    cli = dlss5_cli.cli_path(load_config()["ve_folder"])
+    cli = dlss5_cli.cli_path(_read_ve_folder())
     if not cli.is_file():
         _report_missing_cli()
         return
@@ -277,21 +289,71 @@ class DLSS5NeuralRenderScript(scripts.Script):
         return scripts.AlwaysVisible
 
     def ui(self, is_img2img):
-        enable_box = gr.Checkbox(value=False, label="Enable DLSS 5 Neural Render")
-        style_box = gr.Dropdown(choices=dlss5_cli.STYLES, value="Style 0", label="Style", visible=False)
-        intensity_slider = gr.Slider(0.0, 2.0, value=1.0, step=0.05, label="NR Intensity", visible=False)
-        passes_slider = gr.Slider(1, 4, value=1, step=1, label="NR Passes", visible=False)
-        stage_box = gr.Dropdown(
-            choices=dlss5_cli.STAGE_CHOICES, value="Post-hires only", label="Apply stage", visible=False
+        with InputAccordion(
+            value=False,
+            label="DLSS 5 Neural Render",
+            elem_id=self.elem_id("main-accordion"),
+        ) as enable:
+            style = gr.Dropdown(
+                choices=dlss5_cli.STYLES,
+                value="Style 0",
+                label="Style",
+                info="Visual Enhancer neural-rendering style",
+                elem_id=self.elem_id("style"),
+            )
+            intensity = gr.Slider(
+                0.0,
+                2.0,
+                value=1.0,
+                step=0.05,
+                label="NR Intensity",
+                info="Neural-rendering strength, 0.0 to 2.0 (1.0 is the Visual Enhancer default)",
+                elem_id=self.elem_id("intensity"),
+            )
+            passes = gr.Slider(
+                1,
+                4,
+                value=1,
+                step=1,
+                label="NR Passes",
+                info="Neural-rendering passes per image (a Visual Enhancer preset is used when greater than 1)",
+                elem_id=self.elem_id("passes"),
+            )
+            stage = gr.Dropdown(
+                choices=dlss5_cli.STAGE_CHOICES,
+                value="Post-hires only",
+                label="Apply stage",
+                info="When to run the enhancement relative to the hires fix",
+                elem_id=self.elem_id("apply-stage"),
+            )
+            check_button = gr.Button("Check Visual Enhancer", variant="secondary")
+            check_output = gr.Textbox(
+                label="Check result",
+                interactive=False,
+                lines=3,
+                elem_id=self.elem_id("check-result"),
+            )
+            check_button.click(fn=self._check_install, outputs=[check_output])
+        return [enable, style, intensity, passes, stage]
+
+    def _check_install(self) -> str:
+        """Check button handler: validate the configured Visual Enhancer without generating."""
+        if getattr(shared.state, "job", ""):
+            return "A generation in progress - wait for it to finish before checking."
+        folder = _read_ve_folder()
+        if not folder:
+            return "FAILED: no Visual Enhancer folder set - set it in Settings > DLSS 5 Neural Render."
+        try:
+            info = dlss5_cli.check_install(folder)
+        except Exception as exc:
+            return f"FAILED: {exc}"
+        if not info["ok"]:
+            return f"FAILED: {info['error']}"
+        gpu = next(g for g in info["gpus"] if g["ai_compatible"])
+        return (
+            f"Visual Enhancer CLI {info['version']} - {gpu['name']} "
+            f"({gpu['vram_gb']} GB, driver {gpu['driver']}) - Neural Rendering supported"
         )
-        enable_box.change(
-            fn=lambda v: [gr.update(visible=v) for _ in range(4)],
-            inputs=[enable_box],
-            outputs=[style_box, intensity_slider, passes_slider, stage_box],
-            queue=False,
-            show_progress=False,
-        )
-        return [enable_box, style_box, intensity_slider, passes_slider, stage_box]
 
     def before_process(self, p, enable, style, intensity, passes, when):
         # Pre-hires wrapping only: hires fix off means pre and post are the
@@ -299,7 +361,7 @@ class DLSS5NeuralRenderScript(scripts.Script):
         # enable_hr attribute (getattr default False covers it).
         if not (enable and when in ("Pre-hires only", "Both") and bool(getattr(p, "enable_hr", False))):
             return
-        cli = dlss5_cli.cli_path(load_config()["ve_folder"])
+        cli = dlss5_cli.cli_path(_read_ve_folder())
         if not cli.is_file():
             # The final pass reports the missing CLI - single report path.
             return
@@ -320,52 +382,17 @@ class DLSS5NeuralRenderScript(scripts.Script):
             errors.report("DLSS 5 Neural Render post-hires pass failed; keeping original images", exc_info=True)
 
 
-def _tab_ui():
-    cfg = load_config()
-    with gr.Blocks(analytics_enabled=False) as ui:
-        gr.Markdown("## DLSS 5 Neural Render")
-        gr.Markdown(
-            "Applies NVIDIA DLSS 5 Neural Rendering to generated images via the official "
-            "[Visual Enhancer](https://github.com/Merserk/dlss5-visual-enhancer) CLI (v15.0+). "
-            "Install Visual Enhancer separately, then point this tab at its folder."
-            "\n\nUnofficial community tool. Not affiliated with NVIDIA or Merserk."
-        )
-        folder_box = gr.Textbox(
-            label="Visual Enhancer folder (containing VE_CLI.exe)",
-            value=cfg["ve_folder"],
-        )
-        status = gr.Textbox(label="Status", interactive=False)
-        with gr.Row():
-            check_btn = gr.Button("Check", variant="primary", scale=1)
-            save_btn = gr.Button("Save", scale=1)
-        check_btn.click(fn=_do_check, inputs=[folder_box], outputs=[status, folder_box])
-        save_btn.click(fn=_do_save, inputs=[folder_box], outputs=[status])
-    return ui
+def on_ui_settings():
+    """Register the extension settings in the standard WebUI Settings panel."""
+    _migrate_legacy_config()
+    shared.opts.add_option(
+        OPT_KEY,
+        shared.OptionInfo(
+            "",
+            "Visual Enhancer folder: path to the Visual Enhancer installation folder (must contain VE_CLI.exe)",
+            section=("dlss5_neural_render", "DLSS 5 Neural Render"),
+        ),
+    )
 
 
-def _do_check(folder: str):
-    folder = (folder or "").strip()
-    save_config({"ve_folder": folder})
-    info = dlss5_cli.check_install(folder)
-    if info["ok"]:
-        gpu = next(g for g in info["gpus"] if g["ai_compatible"])
-        status = (
-            f"Visual Enhancer CLI {info['version']} - {gpu['name']} "
-            f"({gpu['vram_gb']} GB, driver {gpu['driver']}) - Neural Rendering supported"
-        )
-    else:
-        status = info["error"]
-    return status, folder
-
-
-def _do_save(folder: str) -> str:
-    folder = (folder or "").strip()
-    save_config({"ve_folder": folder})
-    return f"Saved. Visual Enhancer folder: {folder or '(not set)'}"
-
-
-def on_ui_tabs():
-    return [(_tab_ui(), "DLSS 5 Neural Render", "dlss5_neural_render")]
-
-
-script_callbacks.on_ui_tabs(on_ui_tabs)
+script_callbacks.on_ui_settings(on_ui_settings)

@@ -173,7 +173,7 @@ def stage_label(when: str, enable_hr: bool) -> str:
 
 
 def check_install(ve_folder: str) -> dict:
-    """Probe the CLI (--version, devices --json) for the settings tab status line."""
+    """Probe the CLI (--version, devices --json) for the install check status line."""
     result = {"ok": False, "version": "", "gpus": [], "error": ""}
     cli = cli_path(ve_folder)
     if not cli.is_file():
