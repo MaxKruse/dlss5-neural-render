@@ -73,6 +73,13 @@ Notes:
   enhanced image.
 - The job progress label switches to "DLSS 5 Neural Render (pre-hires|post-hires, N image(s))"
   while a render runs.
+- The WebUI console prints a status line for every pass: the stage
+  (pre-hires / post-hires), image count, style, intensity, pass count,
+  and the result with elapsed time, e.g.
+  `DLSS 5 Neural Render: pre-hires pass done in 12.3s - 2/2 image(s) enhanced`.
+  Failures print `... pass failed - <reason> (log: <path>)`; when the
+  pre pass covered every image, the post pass prints
+  `post-hires pass skipped - all images already enhanced in the pre-hires pass`.
 - NR Passes > 1 sends the official `nr_passes` preset to the CLI (the
   extension's one supported knob; other VE settings stay at their defaults).
 
