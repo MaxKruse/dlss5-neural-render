@@ -7,40 +7,43 @@ CLI (`VE_CLI.exe`) as a subprocess - the same engine behind VE's
 
 ## What it provides
 
-1. **DLSS 5 Neural Render settings tab** - configure the Visual Enhancer
-   folder (where `VE_CLI.exe` lives), check the install (CLI version,
-   GPU, driver, Neural Rendering support), and save the setting. Persisted
-   to `extensions/dlss5-neural-render/data/dlss5_neural_render.json`.
-2. **DLSS 5 Neural Render script** (always visible, txt2img + img2img
-   dropdown) - enable flag plus the three official control labels:
-   **Style** (0/1/2), **NR Intensity** (0-2), **NR Passes** (1-4), and an
-   **Apply stage** selector.
+1. **Settings panel entry** (standard WebUI Settings, section "DLSS 5
+   Neural Render") - configure the Visual Enhancer folder (where
+   `VE_CLI.exe` lives). Persisted to the WebUI's `config.json`.
+2. **DLSS 5 Neural Render script** (always visible, txt2img + img2img) -
+   a script accordion that doubles as the enable switch, containing the
+   official control labels: **Style** (0/1/2), **NR Intensity** (0-2),
+   **NR Passes** (1-4), an **Apply stage** selector, and a
+   **Check Visual Enhancer** button that probes the install (CLI version,
+   GPU, driver, Neural Rendering support) without generating.
 
 ## Requirements
 
 - [Visual Enhancer v15.0+](https://github.com/Merserk/dlss5-visual-enhancer/releases)
   installed separately (the extension ships no engine code, no DLLs).
 - An NVIDIA RTX GPU with a driver current enough for `ai_compatible` (the
-  tab's **Check** button reports this).
+  script's **Check Visual Enhancer** button reports this).
 - This WebUI's Python venv (the extension adds no dependencies).
 
 ## Setup
 
 1. Install Visual Enhancer (ZIP, ~693 MiB) and unzip it to a folder,
    e.g. `C:\Apps\VisualEnhancer`.
-2. Open the **DLSS 5 Neural Render** settings tab.
-3. Enter the folder that directly contains `VE_CLI.exe`.
-4. Press **Check** - a green status line confirms CLI version, GPU and
-   driver; press **Save**.
+2. Open **Settings** (left sidebar) and find the **DLSS 5 Neural Render**
+   section.
+3. Enter the folder that directly contains `VE_CLI.exe` and press **Save**.
+4. Verify with the **Check Visual Enhancer** button inside the script
+   accordion on the generation page - a status line confirms CLI version,
+   GPU and driver.
 
 ## Usage
 
 1. Open **txt2img** (or img2img), select **DLSS 5 Neural Render** in the
-   *Script* dropdown.
-2. Tick **Enable DLSS 5 Neural Render** - the other four controls appear.
-3. Pick a **Style** (0/1/2), **NR Intensity** (0-2, default 1.0) and
+   *Script* dropdown and open the **DLSS 5 Neural Render** accordion -
+   opening it enables the pass.
+2. Pick a **Style** (0/1/2), **NR Intensity** (0-2, default 1.0) and
    **NR Passes** (1-4, default 1).
-4. Choose the **Apply stage**:
+3. Choose the **Apply stage**:
 
    | Stage | What happens |
    |---|---|
@@ -54,8 +57,8 @@ Notes:
   hooks the base images the hires fix is about to consume, in both modes.
 - If the Visual Enhancer folder is not configured (or `VE_CLI.exe` is
   missing), generation proceeds untouched and a one-time error is reported:
-  "Visual Enhancer not configured - set the folder in the 'DLSS 5 Neural
-  Render' tab".
+  "Visual Enhancer not configured - set the folder in Settings > DLSS 5
+  Neural Render".
 - Images outside the Neural Rendering size range (64-16384 px per side)
   are kept as-is with a per-image error; generation continues.
 - Each enhanced generation gets an infotext comment, e.g.
