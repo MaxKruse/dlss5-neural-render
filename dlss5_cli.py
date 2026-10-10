@@ -32,8 +32,6 @@ def style_index(style: str) -> int:
 
 NR_MIN = 64
 NR_MAX = 16384
-STAGE_CHOICES = ["Pre-hires only", "Post-hires only", "Both"]
-
 # Input files are written by the extension as img_000.png, img_001.png, ...;
 # the CLI result items reference them by path.
 _ITEM_NAME_RE = re.compile(r"^img_(\d{3})\.png$")
@@ -165,27 +163,6 @@ def map_items(items: list) -> dict:
         if match and item.get("state") == "complete":
             out[int(match.group(1))] = item.get("output_path")
     return out
-
-
-def final_indices(when: str, enable_hr: bool, n: int, pre_ok: set) -> list:
-    """Which final-image indices the post-hires pass must still NR.
-
-    Best effort for "Pre-hires only": an image whose pre-pass failed - or
-    none ran at all (e.g. VE not configured) - is NR'd on the final image.
-    """
-    if not enable_hr or when in ("Post-hires only", "Both"):
-        return list(range(n))
-    return [i for i in range(n) if i not in pre_ok]
-
-
-def stage_label(when: str, enable_hr: bool) -> str:
-    if not enable_hr:
-        return "no hires fix"
-    return {
-        "Pre-hires only": "pre-hires",
-        "Post-hires only": "post-hires",
-        "Both": "pre+post hires",
-    }.get(when, "post-hires")
 
 
 def check_install(ve_folder: str) -> dict:

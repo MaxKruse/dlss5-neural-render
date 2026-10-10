@@ -113,30 +113,3 @@ def test_sizes_ok_boundaries(cli_mod):
     assert cli_mod.sizes_ok(64, 512)
     assert cli_mod.sizes_ok(512, 16384)
     assert not cli_mod.sizes_ok(512, 16385)
-
-
-def test_final_indices_hires_off_always_all(cli_mod):
-    for when in cli_mod.STAGE_CHOICES:
-        assert cli_mod.final_indices(when, False, 3, {0, 1}) == [0, 1, 2]
-
-
-def test_final_indices_hires_on_post_and_both_all(cli_mod):
-    assert cli_mod.final_indices("Post-hires only", True, 3, {0, 1, 2}) == [0, 1, 2]
-    assert cli_mod.final_indices("Both", True, 3, {0, 1, 2}) == [0, 1, 2]
-
-
-def test_final_indices_pre_only_excludes_succeeded(cli_mod):
-    assert cli_mod.final_indices("Pre-hires only", True, 3, {0, 1, 2}) == []
-    assert cli_mod.final_indices("Pre-hires only", True, 3, {0, 2}) == [1]
-    assert cli_mod.final_indices("Pre-hires only", True, 3, set()) == [0, 1, 2]
-
-
-def test_stage_label_hires_off(cli_mod):
-    for when in cli_mod.STAGE_CHOICES:
-        assert cli_mod.stage_label(when, False) == "no hires fix"
-
-
-def test_stage_label_hires_on(cli_mod):
-    assert cli_mod.stage_label("Pre-hires only", True) == "pre-hires"
-    assert cli_mod.stage_label("Post-hires only", True) == "post-hires"
-    assert cli_mod.stage_label("Both", True) == "pre+post hires"

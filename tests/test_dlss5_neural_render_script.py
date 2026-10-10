@@ -303,7 +303,7 @@ def _postprocess_setup(monkeypatch, tmp_path):
     fakes.opts.data["dlss5_neural_render_ve_folder"] = str(ve)
     pre1, path1 = _saved_pil(tmp_path, (1, 2, 3), "a.png")
     pre2, path2 = _saved_pil(tmp_path, (4, 5, 6), "b.png")
-    p = types.SimpleNamespace(enable_hr=False, dlss5nr_pre_ok=set(), comment=lambda *a: None)
+    p = types.SimpleNamespace(comment=lambda *a: None)
     processed = types.SimpleNamespace(images=[pre1, pre2])
     return module, fakes, p, processed, pre1, pre2, path1, path2
 
@@ -314,7 +314,7 @@ def test_postprocess_pass_updates_output_folder_files(monkeypatch, tmp_path):
     enh2 = Image.new("RGB", (8, 8), (10, 10, 10))
     module.render_batch = lambda *a, **k: ([enh1, enh2], [None, None])
 
-    module._postprocess_pass(p, processed, "Style 0 (default; balanced)", 1.0, 1, "Post-hires only")
+    module._postprocess_pass(p, processed, "Style 0 (default; balanced)", 1.0, 1)
 
     assert processed.images == [enh1, enh2]
     assert _pixel(path1) == (9, 9, 9)
@@ -327,10 +327,40 @@ def test_postprocess_pass_resaves_only_successful_slots(monkeypatch, tmp_path):
     enh2 = Image.new("RGB", (8, 8), (10, 10, 10))
     module.render_batch = lambda *a, **k: ([enh1, enh2], [None, "no result item"])
 
-    module._postprocess_pass(p, processed, "Style 0 (default; balanced)", 1.0, 1, "Post-hires only")
+    module._postprocess_pass(p, processed, "Style 0 (default; balanced)", 1.0, 1)
 
     assert processed.images[0] is enh1
     assert processed.images[1] is pre2  # failed slot keeps the original
     assert _pixel(path1) == (9, 9, 9)
     assert _pixel(path2) == (4, 5, 6)  # untouched file stays pre-enhancement
     assert fakes.errors  # the slot error was reported
+
+
+def test_postprocess_comment_omits_stage_wording(monkeypatch, tmp_path):
+    module, _, p, processed, _, _, _, _ = _postprocess_setup(monkeypatch, tmp_path)
+    comments = []
+    p.comment = comments.append
+    module.render_batch = lambda *a, **k: (
+        [Image.new("RGB", (8, 8), (9, 9, 9)), Image.new("RGB", (8, 8), (9, 9, 9))], ["", ""]
+    )
+
+    module._postprocess_pass(p, processed, "Style 0 (default; balanced)", 1.2, 2)
+
+    assert comments == ["DLSS 5 Neural Render: Style 0, intensity 1.2, passes 2"]
+
+
+def test_pre_hires_machinery_removed(monkeypatch):
+    module, _ = _load_script(monkeypatch)
+    for name in (
+        "_run_pre_pass",
+        "_pre_image_mode",
+        "_pre_latent_mode",
+        "_install_pre_wrapper",
+        "_record_pre_pass",
+        "tensors_to_pils",
+        "pils_to_tensors",
+    ):
+        assert not hasattr(module, name)
+    assert not hasattr(module.DLSS5NeuralRenderScript, "before_process")
+    for name in ("STAGE_CHOICES", "final_indices", "stage_label"):
+        assert not hasattr(module.dlss5_cli, name)
