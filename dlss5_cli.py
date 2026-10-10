@@ -13,7 +13,23 @@ from pathlib import Path
 
 PRESET_FORMAT = "dlss5-visual-enhancer-settings-preset"
 PRESET_SCHEMA_VERSION = 34
-STYLES = ["Style 0", "Style 1", "Style 2"]
+STYLES = [
+    "Style 0 (default; balanced - good for: general scenes, 3D renders, landscapes)",
+    "Style 1 (natural; gentle, skin-tone preserving - good for: portraits, characters, faces)",
+    "Style 2 (cinematic; filmic, reduced shine - good for: dramatic lighting, mood, cutscene looks)",
+]
+
+_STYLE_RE = re.compile(r"^Style (\d+)")
+
+
+def style_index(style: str) -> int:
+    """Dropdown label ('Style 1 (natural; ...)') -> 1 for the CLI --style flag."""
+    m = _STYLE_RE.match(style)
+    if m is None:
+        raise ValueError(f"unknown style: {style!r}")
+    return int(m.group(1))
+
+
 NR_MIN = 64
 NR_MAX = 16384
 STAGE_CHOICES = ["Pre-hires only", "Post-hires only", "Both"]

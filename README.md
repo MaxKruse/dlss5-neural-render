@@ -12,7 +12,7 @@ CLI (`VE_CLI.exe`) as a subprocess - the same engine behind VE's
    `VE_CLI.exe` lives). Persisted to the WebUI's `config.json`.
 2. **DLSS 5 Neural Render script** (always visible, txt2img + img2img) -
    a script accordion that doubles as the enable switch, containing the
-   official control labels: **Style** (0/1/2), **NR Intensity** (0-2),
+   official control labels: **Style** (0/1/2, each labeled with what it is good for), **NR Intensity** (0-2),
    **NR Passes** (1-4), an **Apply stage** selector, and a
    **Check Visual Enhancer** button that probes the install (CLI version,
    GPU, driver, Neural Rendering support) without generating.
@@ -42,7 +42,11 @@ CLI (`VE_CLI.exe`) as a subprocess - the same engine behind VE's
    *Script* dropdown and open the **DLSS 5 Neural Render** accordion -
    opening it enables the pass.
 2. Pick a **Style** (0/1/2), **NR Intensity** (0-2, default 1.0) and
-   **NR Passes** (1-4, default 1).
+   **NR Passes** (1-4, default 1). Style 0 (default) is a balanced
+   all-rounder (general scenes, 3D renders, landscapes); 1 (natural)
+   is gentler and preserves skin tones (portraits, characters, faces);
+   2 (cinematic) is filmic with reduced shine (dramatic lighting,
+   mood, cutscene looks).
 3. Choose the **Apply stage**:
 
    | Stage | What happens |

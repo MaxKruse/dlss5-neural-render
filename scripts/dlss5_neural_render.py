@@ -114,7 +114,7 @@ def _render_cli(cli, pils, results, errors_list, valid, style, intensity, passes
         if passes_i != 1:
             preset = dlss5_cli.write_preset(Path(in_dir) / "preset.json", passes_i)
         cmd = dlss5_cli.build_command(
-            cli, in_dir, out_dir, int(style.replace("Style ", "")), float(intensity), preset
+            cli, in_dir, out_dir, dlss5_cli.style_index(style), float(intensity), preset
         )
         shared.state.job = f"DLSS 5 Neural Render ({job}, {len(valid)} image(s))"
         try:
@@ -188,7 +188,7 @@ def _add_comment(p, state: dict) -> None:
         return
     p.comment(
         f"DLSS 5 Neural Render: {dlss5_cli.stage_label(state['when'], state['enable_hr'])}, "
-        f"{state['style']}, intensity {float(state['intensity']):g}, passes {int(state['passes'])}"
+        f"Style {dlss5_cli.style_index(state['style'])}, intensity {float(state['intensity']):g}, passes {int(state['passes'])}"
     )
     p.dlss5nr_commented = True
 
@@ -296,7 +296,7 @@ class DLSS5NeuralRenderScript(scripts.Script):
         ) as enable:
             style = gr.Dropdown(
                 choices=dlss5_cli.STYLES,
-                value="Style 0",
+                value=dlss5_cli.STYLES[0],
                 label="Style",
                 info="Visual Enhancer neural-rendering style",
                 elem_id=self.elem_id("style"),
