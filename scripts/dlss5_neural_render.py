@@ -17,6 +17,7 @@ import logging
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 import gradio as gr
@@ -104,10 +105,20 @@ def render_batch(cli: Path, pils: list, style: str, intensity: float, passes: in
     return _render_cli(cli, pils, results, errors_list, valid, style, intensity, passes, job)
 
 
+def _print_status(message: str) -> None:
+    """One console status line; print() reaches the WebUI CLI even at the default log level."""
+    print(f"DLSS 5 Neural Render: {message}")
+
+
 def _render_cli(cli, pils, results, errors_list, valid, style, intensity, passes, job):
     passes_i = int(passes)
     in_dir = tempfile.mkdtemp(prefix="dlss5nr_in_")
     out_dir = tempfile.mkdtemp(prefix="dlss5nr_out_")
+    started = time.monotonic()
+    _print_status(
+        f"{job} pass starting - {len(valid)} image(s), style {dlss5_cli.style_index(style)}, "
+        f"intensity {float(intensity):g}, passes {passes_i}"
+    )
     try:
         for i in valid:
             pils[i].convert("RGB").save(Path(in_dir) / f"img_{i:03d}.png")
@@ -127,10 +138,17 @@ def _render_cli(cli, pils, results, errors_list, valid, style, intensity, passes
         if not result.get("ok"):
             reason = result.get("error") or f"exit code {rc}"
             log_path = result.get("log_path", "n/a")
+            _print_status(f"{job} pass failed - {reason} (log: {log_path})")
             for i in valid:
                 errors_list[i] = f"VE CLI: {reason} (log: {log_path})"
             return results, errors_list
         _collect_results(result, results, errors_list, valid)
+        n_ok = sum(1 for i in valid if not errors_list[i])
+        note = f", {len(valid) - n_ok} failed" if n_ok < len(valid) else ""
+        _print_status(
+            f"{job} pass done in {time.monotonic() - started:.1f}s - "
+            f"{n_ok}/{len(valid)} image(s) enhanced{note}"
+        )
         return results, errors_list
     finally:
         shutil.rmtree(in_dir, ignore_errors=True)
@@ -268,6 +286,7 @@ def _postprocess_pass(p, processed, style, intensity, passes, when) -> None:
         when, enable_hr, len(processed.images), getattr(p, "dlss5nr_pre_ok", set())
     )
     if not idxs:
+        _print_status("post-hires pass skipped - all images already enhanced in the pre-hires pass")
         return
     cli = dlss5_cli.cli_path(_read_ve_folder())
     if not cli.is_file():
@@ -407,6 +426,10 @@ class DLSS5NeuralRenderScript(scripts.Script):
     def postprocess(self, p, processed, enable, style, intensity, passes, when):
         if not enable:
             return
+        _print_status(
+            f"using {dlss5_cli.stage_label(when, bool(getattr(p, 'enable_hr', False)))} - "
+            f"Style {dlss5_cli.style_index(style)}, intensity {float(intensity):g}, passes {int(passes)}"
+        )
         try:
             _postprocess_pass(p, processed, style, intensity, passes, when)
         except Exception:
