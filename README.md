@@ -13,7 +13,7 @@ CLI (`VE_CLI.exe`) as a subprocess - the same engine behind VE's
 2. **DLSS 5 Neural Render script** (always visible, txt2img + img2img) -
    a script accordion that doubles as the enable switch, containing the
    official control labels: **Style** (0/1/2, each labeled with what it is good for), **NR Intensity** (0-2),
-   **NR Passes** (1-4), an **Apply stage** selector, and a
+   **NR Passes** (1-4), and a
    **Check Visual Enhancer** button that probes the install (CLI version,
    GPU, driver, Neural Rendering support) without generating.
 
@@ -47,18 +47,11 @@ CLI (`VE_CLI.exe`) as a subprocess - the same engine behind VE's
    is gentler and preserves skin tones (portraits, characters, faces);
    2 (cinematic) is filmic with reduced shine (dramatic lighting,
    mood, cutscene looks).
-3. Choose the **Apply stage**:
-
-   | Stage | What happens |
-   |---|---|
-   | Post-hires only (default) | Every final image is NR'd after generation. |
-   | Pre-hires only | The base (pre-hires) images are NR'd, then the hires fix upscales the enhanced base; a second post pass would double-process, so the final pass is skipped for images already NR'd. If hires fix is off, the pre and post stages are the same image and everything is NR'd once. |
-   | Both | The base is NR'd before the hires fix AND the final image is NR'd again afterwards. |
+3. The enhancement runs on the final images: every image is NR'd after
+   generation, i.e. after the hires fix has already been applied (if one
+   was used). There is no pre-hires stage.
 
 Notes:
-
-- The hires fix upscaler/latent-scale mode does not matter - the pre pass
-  hooks the base images the hires fix is about to consume, in both modes.
 - If the Visual Enhancer folder is not configured (or `VE_CLI.exe` is
   missing), generation proceeds untouched and a one-time error is reported:
   "Visual Enhancer not configured - set the folder in Settings > DLSS 5
@@ -66,20 +59,17 @@ Notes:
 - Images outside the Neural Rendering size range (64-16384 px per side)
   are kept as-is with a per-image error; generation continues.
 - Each enhanced generation gets an infotext comment, e.g.
-  `DLSS 5 Neural Render: pre+post hires, Style 1, intensity 1, passes 2`.
+  `DLSS 5 Neural Render: Style 1, intensity 1, passes 2`.
 - The enhanced images also overwrite their files in the output folder
   (the WebUI writes the pre-enhancement images before the extension's pass
   runs), so the folder, the gallery, and the Save button all show the
   enhanced image.
-- The job progress label switches to "DLSS 5 Neural Render (pre-hires|post-hires, N image(s))"
+- The job progress label switches to "DLSS 5 Neural Render (post-hires, N image(s))"
   while a render runs.
-- The WebUI console prints a status line for every pass: the stage
-  (pre-hires / post-hires), image count, style, intensity, pass count,
-  and the result with elapsed time, e.g.
-  `DLSS 5 Neural Render: pre-hires pass done in 12.3s - 2/2 image(s) enhanced`.
-  Failures print `... pass failed - <reason> (log: <path>)`; when the
-  pre pass covered every image, the post pass prints
-  `post-hires pass skipped - all images already enhanced in the pre-hires pass`.
+- The WebUI console prints status lines for the pass: image count, style,
+  intensity, pass count, and the result with elapsed time, e.g.
+  `DLSS 5 Neural Render: post-hires pass done in 12.3s - 2/2 image(s) enhanced`.
+  Failures print `... pass failed - <reason> (log: <path>)`.
 - NR Passes > 1 sends the official `nr_passes` preset to the CLI (the
   extension's one supported knob; other VE settings stay at their defaults).
 
@@ -94,11 +84,11 @@ The script is always visible, so it takes a slot in `script_args`:
   "width": 1024,
   "height": 1024,
   "script_name": "dlss5 neural render",
-  "script_args": [true, "Style 1", 1.0, 2, "Both"]
+  "script_args": [true, "Style 1", 1.0, 2]
 }
 ```
 
-`script_args` order: enable (bool), style, intensity, passes, apply stage.
+`script_args` order: enable (bool), style, intensity, passes.
 
 ## Troubleshooting
 
